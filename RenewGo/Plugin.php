@@ -22,6 +22,7 @@ use Utils\Helper;
 use Utils\NoPersonal;
 use Utils\Pref;
 use Utils\Schema;
+use Widget\Base\Options as OptionsStorage;
 
 require_once __DIR__ . '/Action.php';
 
@@ -383,23 +384,14 @@ class RenewGo_Plugin implements PluginInterface
         if ($row) {
             $config = self::decodeOptionValue((string) ($row['value'] ?? ''));
             $config = is_array($config) ? $config : [];
-            $config['signSecret'] = $secret;
-            $db->query(
-                $db->update('table.options')
-                    ->rows(['value' => self::encodeOptionValue($config)])
-                    ->where('name = ?', 'plugin:RenewGo')
-            );
-            return;
+        } else {
+            $config = [];
         }
 
-        $db->query(
-            $db->insert('table.options')
-                ->rows([
-                    'name' => 'plugin:RenewGo',
-                    'user' => 0,
-                    'value' => self::encodeOptionValue(['signSecret' => $secret])
-                ])
-        );
+        $config['signSecret'] = $secret;
+        OptionsStorage::alloc()->saveOptions([
+            'plugin:RenewGo' => self::encodeOptionValue($config),
+        ]);
     }
 
     public static function verifySign(string $encoded, int $time, string $sign): bool
