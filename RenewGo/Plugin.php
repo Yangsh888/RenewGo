@@ -752,14 +752,28 @@ class RenewGo_Plugin implements PluginInterface
         $bucket = (string) intdiv(time(), 3600);
         $key = 'renewgo:rate:' . md5($ip . ':' . $bucket);
         if ($cache->enabled()) {
-            $hit = false;
-            $count = (int) $cache->get($key, $hit);
-            $count = $hit ? $count : 0;
-            if ($count >= $limit) {
+            $lockKey = $key . ':lock';
+            if (!$cache->tryLock($lockKey, 3)) {
+                self::reportException('checkRateLimit.cache', new RuntimeException('cache rate lock unavailable'));
                 return false;
             }
-            $cache->set($key, $count + 1, 3700);
-            return true;
+
+            try {
+                $hit = false;
+                $count = (int) $cache->get($key, $hit);
+                $count = $hit ? $count : 0;
+                if ($count >= $limit) {
+                    return false;
+                }
+
+                if (!$cache->set($key, $count + 1, 3700)) {
+                    self::reportException('checkRateLimit.cache', new RuntimeException('cache rate backend unavailable'));
+                    return false;
+                }
+                return true;
+            } finally {
+                $cache->unlock($lockKey);
+            }
         }
 
         try {
@@ -774,17 +788,18 @@ class RenewGo_Plugin implements PluginInterface
             }
         } catch (Throwable $e) {
             self::reportException('checkRateLimit', $e);
+            return false;
         }
 
         return true;
     }
 
-    public static function logEvent(string $action, string $result, string $target = '', string $referer = '', bool $force = false): void
+    public static function logEvent(string $action, string $result, string $target = '', string $referer = '', bool $force = false): bool
     {
         $settings = self::getSettings();
         $level = (string) ($settings['logLevel'] ?? 'basic');
         if (!$force && $level === 'off') {
-            return;
+            return true;
         }
 
         $ip = (string) \Typecho\Request::getInstance()->getIp();
@@ -809,8 +824,10 @@ class RenewGo_Plugin implements PluginInterface
                 'referer' => self::textCut($refererValue, 512),
                 'created_at' => time()
             ]));
+            return true;
         } catch (Throwable $e) {
             self::reportException('logEvent', $e);
+            return false;
         }
     }
 
@@ -966,6 +983,7 @@ class RenewGo_Plugin implements PluginInterface
             Schema::ensureRenewGo(Db::get());
         } catch (Throwable $e) {
             self::reportException('createTables', $e);
+            throw new RuntimeException(_t('RenewGo 数据表初始化失败，插件未启用'), 0, $e);
         }
     }
 

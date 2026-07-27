@@ -9,6 +9,7 @@ $db = \Typecho\Db::get();
 $limit = (int) ($settings['panelSize'] ?? 40);
 $limit = max(10, min(200, $limit));
 $logs = [];
+$backendError = '';
 $summary = (object) ['total' => 0, 'jump_success' => 0, 'jump_block' => 0];
 
 try {
@@ -28,6 +29,8 @@ try {
         ->order('id', \Typecho\Db::SORT_DESC)->limit($limit));
 } catch (Throwable $e) {
     $logs = [];
+    $backendError = _t('日志与限流状态后端不可用，外链跳转会按保守策略拒绝，请检查数据库表和权限。');
+    error_log('RenewGo.Panel: ' . $e->getMessage());
 }
 
 $urlTest = RenewGo_Plugin::apiUrl('test');
@@ -49,7 +52,11 @@ $urlImport = RenewGo_Plugin::apiUrl('import');
                 </div>
             </div>
         </div>
-    </section>
+</section>
+
+    <?php if ($backendError !== ''): ?>
+        <div class="message error"><?php echo htmlspecialchars($backendError, ENT_QUOTES, 'UTF-8'); ?></div>
+    <?php endif; ?>
 
     <div class="tr-panel-kpis">
         <article class="tr-panel-kpi">

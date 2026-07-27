@@ -80,10 +80,9 @@ class RenewGo_Action extends Typecho_Widget
                     return;
                 }
             }
-            if (!$this->enforceRateLimit($settings, 'go', $url)) {
+            if (!$this->enforceRateLimit($settings, 'go', 'redirect', $url)) {
                 return;
             }
-            RenewGo_Plugin::logEvent('go', 'redirect', $url, (string) $this->request->getReferer(), true);
             $this->response->redirect($url);
             return;
         }
@@ -139,11 +138,10 @@ class RenewGo_Action extends Typecho_Widget
             return;
         }
 
-        if (!$this->enforceRateLimit($settings, 'jump', $url)) {
+        if (!$this->enforceRateLimit($settings, 'jump', 'success', $url)) {
             return;
         }
 
-        RenewGo_Plugin::logEvent('jump', 'success', $url, (string) $this->request->getReferer(), true);
         $this->response->redirect($url);
     }
 
@@ -254,15 +252,27 @@ class RenewGo_Action extends Typecho_Widget
         ];
     }
 
-    private function enforceRateLimit(array $settings, string $scope, string $url): bool
+    private function enforceRateLimit(array $settings, string $scope, string $result, string $url): bool
     {
         $ip = (string) $this->request->getIp();
-        if (RenewGo_Plugin::checkRateLimit($ip, $settings)) {
-            return true;
+        if (!RenewGo_Plugin::checkRateLimit($ip, $settings)) {
+            $this->failPage($scope, 'rate-limit', $url, _t('访问过于频繁，请稍后重试'), 429, true);
+            return false;
         }
 
-        $this->failPage($scope, 'rate-limit', $url, _t('访问过于频繁，请稍后重试'), 429, true);
-        return false;
+        if (!RenewGo_Plugin::logEvent(
+            $scope,
+            $result,
+            $url,
+            (string) $this->request->getReferer(),
+            true
+        )) {
+            $this->response->setStatus(503);
+            $this->renderError(_t('外链安全状态后端暂时不可用，请稍后重试'));
+            return false;
+        }
+
+        return true;
     }
 
     private function failPage(
