@@ -1,9 +1,19 @@
 <?php
+declare(strict_types=1);
+
+namespace TypechoPlugin\RenewGo;
+
+use Typecho\Widget;
+use Widget\User;
+use Widget\Security;
+use Utils\Helper;
+use Typecho\Cache;
+
 if (!defined('__TYPECHO_ROOT_DIR__')) {
     exit;
 }
 
-class RenewGo_Action extends Typecho_Widget
+class Action extends Widget
 {
     private const MAX_JSON_SIZE = 32768;
     private const CLEANUP_INTERVAL = 3600;
@@ -44,7 +54,7 @@ class RenewGo_Action extends Typecho_Widget
 
     public function go()
     {
-        $settings = RenewGo_Plugin::getSettings();
+        $settings = Plugin::getSettings();
         $keepDays = (int) ($settings['logKeepDays'] ?? 0);
         if ($keepDays > 0) {
             $this->maybeCleanupLogs($keepDays);
@@ -67,7 +77,7 @@ class RenewGo_Action extends Typecho_Widget
         }
 
         if ($settings['mode'] === 'direct302') {
-            $isWhitelisted = RenewGo_Plugin::isWhitelisted($url, $settings);
+            $isWhitelisted = Plugin::isWhitelisted($url, $settings);
             $whitelistOnly = (string) ($settings['directWhitelistOnly'] ?? '1') === '1';
             if ($whitelistOnly) {
                 $whitelist = trim((string) ($settings['whitelist'] ?? ''));
@@ -87,16 +97,16 @@ class RenewGo_Action extends Typecho_Widget
             return;
         }
 
-        $jumpUrl = RenewGo_Plugin::buildJumpUrl($encoded);
+        $jumpUrl = Plugin::buildJumpUrl($encoded);
         $title = (string) ($settings['pageTitle'] ?? _t('外链访问提示'));
         $staySeconds = (int) ($settings['staySeconds'] ?? 0);
         $host = (string) parse_url($url, PHP_URL_HOST);
-        $display = RenewGo_Plugin::textCut($url, 120) !== $url ? RenewGo_Plugin::textCut($url, 117) . '...' : $url;
+        $display = Plugin::textCut($url, 120) !== $url ? Plugin::textCut($url, 117) . '...' : $url;
         $home = $this->siteUrl();
         $newTab = (string) ($settings['openInNewTab'] ?? '1') === '1';
         $template = __DIR__ . '/view/interstitial.php';
 
-        RenewGo_Plugin::logEvent('go', 'interstitial', $url, (string) $this->request->getReferer(), true);
+        Plugin::logEvent('go', 'interstitial', $url, (string) $this->request->getReferer(), true);
 
         if (file_exists($template)) {
             include $template;
@@ -108,7 +118,7 @@ class RenewGo_Action extends Typecho_Widget
 
     private function jump(): void
     {
-        $settings = RenewGo_Plugin::getSettings();
+        $settings = Plugin::getSettings();
         $keepDays = (int) ($settings['logKeepDays'] ?? 0);
         if ($keepDays > 0) {
             $this->maybeCleanupLogs($keepDays);
@@ -127,7 +137,7 @@ class RenewGo_Action extends Typecho_Widget
         $encoded = trim((string) $this->request->get('target', ''));
         $time = (int) $this->request->get('ts');
         $sign = (string) $this->request->get('sig');
-        if (!RenewGo_Plugin::verifySign($encoded, $time, $sign)) {
+        if (!Plugin::verifySign($encoded, $time, $sign)) {
             $this->failPage('jump', 'forbidden', '', _t('链接校验失败'), 403, true);
             return;
         }
@@ -148,32 +158,32 @@ class RenewGo_Action extends Typecho_Widget
     private function testRule(): void
     {
         $raw = $this->rawJson();
-        $url = RenewGo_Plugin::normalizeUrl((string) ($raw['url'] ?? ''));
+        $url = Plugin::normalizeUrl((string) ($raw['url'] ?? ''));
         if ($url === '') {
             $this->jsonError(_t('URL 格式无效'), 400, 'invalid_url');
         }
 
-        $settings = RenewGo_Plugin::getSettings();
-        $whitelisted = RenewGo_Plugin::isWhitelisted($url, $settings);
-        $rewrite = RenewGo_Plugin::shouldRewriteUrl($url, $settings);
+        $settings = Plugin::getSettings();
+        $whitelisted = Plugin::isWhitelisted($url, $settings);
+        $rewrite = Plugin::shouldRewriteUrl($url, $settings);
         $this->jsonSuccess([
             'success' => 1,
             'url' => $url,
             'whitelisted' => $whitelisted ? 1 : 0,
             'rewrite' => $rewrite ? 1 : 0,
-            'go' => $rewrite ? RenewGo_Plugin::buildGoUrl($url) : $url
+            'go' => $rewrite ? Plugin::buildGoUrl($url) : $url
         ]);
     }
 
     private function purgeLogs(): void
     {
-        RenewGo_Plugin::purgeLogs();
+        Plugin::purgeLogs();
         $this->jsonSuccess(['success' => 1]);
     }
 
     private function exportRules(): void
     {
-        $data = RenewGo_Plugin::exportRules();
+        $data = Plugin::exportRules();
         $this->jsonSuccess(['success' => 1, 'data' => $data]);
     }
 
@@ -181,7 +191,7 @@ class RenewGo_Action extends Typecho_Widget
     {
         $raw = $this->rawJson();
         $rules = (string) ($raw['rules'] ?? '');
-        $settings = RenewGo_Plugin::importRules($rules);
+        $settings = Plugin::importRules($rules);
         $this->jsonSuccess(['success' => 1, 'whitelist' => $settings['whitelist'] ?? '']);
     }
 
@@ -211,9 +221,9 @@ class RenewGo_Action extends Typecho_Widget
 
     private function guardAdmin(): void
     {
-        \Widget\User::alloc()->pass('administrator');
+        User::alloc()->pass('administrator');
         $token = (string) $this->request->get('_');
-        $expect = \Widget\Security::alloc()->getToken('renew-go-admin');
+        $expect = Security::alloc()->getToken('renew-go-admin');
         if (!hash_equals($expect, $token)) {
             $this->jsonError(_t('请求校验失败'), 403, 'forbidden');
         }
@@ -221,7 +231,7 @@ class RenewGo_Action extends Typecho_Widget
 
     private function renderError(string $message): void
     {
-        $settings = RenewGo_Plugin::getSettings();
+        $settings = Plugin::getSettings();
         $title = (string) ($settings['pageTitle'] ?? _t('外链访问提示'));
         $host = '';
         $display = $message;
@@ -234,7 +244,7 @@ class RenewGo_Action extends Typecho_Widget
 
     private function siteUrl(): string
     {
-        $site = (string) \Utils\Helper::options()->siteUrl;
+        $site = (string) Helper::options()->siteUrl;
         if ($site === '') {
             $site = (string) $this->request->getUrlPrefix();
         }
@@ -244,23 +254,23 @@ class RenewGo_Action extends Typecho_Widget
 
     private function resolveTarget(string $encoded): array
     {
-        $decoded = RenewGo_Plugin::decodeTarget($encoded);
+        $decoded = Plugin::decodeTarget($encoded);
 
         return [
             'decoded' => $decoded,
-            'url' => RenewGo_Plugin::normalizeUrl($decoded)
+            'url' => Plugin::normalizeUrl($decoded)
         ];
     }
 
     private function enforceRateLimit(array $settings, string $scope, string $result, string $url): bool
     {
         $ip = (string) $this->request->getIp();
-        if (!RenewGo_Plugin::checkRateLimit($ip, $settings)) {
+        if (!Plugin::checkRateLimit($ip, $settings)) {
             $this->failPage($scope, 'rate-limit', $url, _t('访问过于频繁，请稍后重试'), 429, true);
             return false;
         }
 
-        if (!RenewGo_Plugin::logEvent(
+        if (!Plugin::logEvent(
             $scope,
             $result,
             $url,
@@ -283,7 +293,7 @@ class RenewGo_Action extends Typecho_Widget
         int $status = 200,
         bool $force = false
     ): void {
-        RenewGo_Plugin::logEvent($scope, $result, $target, (string) $this->request->getReferer(), $force);
+        Plugin::logEvent($scope, $result, $target, (string) $this->request->getReferer(), $force);
         if ($status !== 200) {
             $this->response->setStatus($status);
         }
@@ -310,7 +320,7 @@ class RenewGo_Action extends Typecho_Widget
 
     private function maybeCleanupLogs(int $keepDays): void
     {
-        $cache = \Typecho\Cache::getInstance();
+        $cache = Cache::getInstance();
         $cacheKey = 'renewgo:last_cleanup';
         $lockKey = 'renewgo:cleanup_lock';
         $now = time();
@@ -331,7 +341,7 @@ class RenewGo_Action extends Typecho_Widget
         }
 
         try {
-            RenewGo_Plugin::cleanupLogs($keepDays);
+            Plugin::cleanupLogs($keepDays);
             if ($cache->enabled()) {
                 $cache->set($cacheKey, $now, $interval * 2);
             }

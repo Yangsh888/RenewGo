@@ -1,4 +1,29 @@
 <?php
+declare(strict_types=1);
+
+namespace TypechoPlugin\RenewGo;
+
+use Typecho\Cache;
+use Typecho\Common;
+use Typecho\Db;
+use Typecho\Plugin as Hook;
+use Typecho\Plugin\Exception as PluginException;
+use Typecho\Plugin\PluginInterface;
+use Typecho\Request;
+use Typecho\Widget\Helper\Form;
+use Widget\Plugins\Edit as PluginsEdit;
+use RuntimeException;
+use Throwable;
+use Utils\Helper;
+use Utils\NoPersonal;
+use Utils\Pref;
+use Widget\Base\Options as OptionsStorage;
+use Widget\Security;
+
+if (!defined('__TYPECHO_ROOT_DIR__')) {
+    exit;
+}
+
 /**
  * 【TypeRenew 专用】外链安全拓展
  *
@@ -8,25 +33,7 @@
  * @version 1.3.1
  * @since 1.4.1
  */
-if (!defined('__TYPECHO_ROOT_DIR__')) {
-    exit;
-}
-
-use Typecho\Cache;
-use Typecho\Common;
-use Typecho\Db;
-use Typecho\Plugin\Exception as PluginException;
-use Typecho\Plugin\PluginInterface;
-use Typecho\Widget\Helper\Form;
-use Utils\Helper;
-use Utils\NoPersonal;
-use Utils\Pref;
-use Utils\Schema;
-use Widget\Base\Options as OptionsStorage;
-
-require_once __DIR__ . '/Action.php';
-
-class RenewGo_Plugin implements PluginInterface
+class Plugin implements PluginInterface
 {
     use NoPersonal;
 
@@ -44,14 +51,14 @@ class RenewGo_Plugin implements PluginInterface
     private static int $bufferLevel = 0;
     private static bool $clientScriptInjected = false;
 
-    public static function activate()
+    public static function activate(): string
     {
         self::createTables();
         self::registerHooks();
         Helper::removeRoute('renew_go');
         Helper::removeRoute('renew_go_action');
-        Helper::addRoute('renew_go', '/go/[target]', 'RenewGo_Action', 'go');
-        Helper::addRoute('renew_go_action', '/action/renew-go', 'RenewGo_Action', 'action');
+        Helper::addRoute('renew_go', '/go/[target]', Action::class, 'go');
+        Helper::addRoute('renew_go_action', '/action/renew-go', Action::class, 'action');
         Helper::removePanel(3, 'RenewGo/Panel.php');
         Helper::addPanel(3, 'RenewGo/Panel.php', '外链安全', '外链安全', 'administrator', false, '', ['icon' => 'i-external']);
         self::ensureConfigStored();
@@ -59,17 +66,18 @@ class RenewGo_Plugin implements PluginInterface
         return _t('RenewGo 已启用');
     }
 
-    public static function deactivate()
+    public static function deactivate(): string
     {
         Helper::removeRoute('renew_go');
         Helper::removeRoute('renew_go_action');
         Helper::removePanel(3, 'RenewGo/Panel.php');
         self::clearConfigCache();
+        return _t('RenewGo 已停用');
     }
 
-    public static function config(Form $form)
+    public static function config(Form $form): void
     {
-        $defaults = self::defaults();
+        $defaults = self::getSettings();
 
         $enabled = new Form\Element\Radio(
             'enabled',
@@ -217,7 +225,7 @@ class RenewGo_Plugin implements PluginInterface
         $form->addInput($whitelist);
     }
 
-    public static function configHandle(array &$settings, bool $isInit)
+    public static function configHandle(array $settings, bool $_isInit): void
     {
         if (!array_key_exists('rewrite', $settings)) {
             $settings['rewrite'] = [];
@@ -227,18 +235,19 @@ class RenewGo_Plugin implements PluginInterface
         }
 
         $settings = self::normalize($settings);
-        \Widget\Plugins\Edit::configPlugin(self::NAME, $settings);
+        PluginsEdit::configPlugin(self::NAME, $settings);
         self::clearConfigCache();
     }
 
     public static function registerHooks(): void
     {
-        \Typecho\Plugin::factory('Widget\\Base\\Contents')->contentEx = ['RenewGo_Plugin', 'rewriteContent'];
-        \Typecho\Plugin::factory('Widget\\Base\\Contents')->excerptEx = ['RenewGo_Plugin', 'rewriteContent'];
-        \Typecho\Plugin::factory('Widget\\Base\\Comments')->contentEx = ['RenewGo_Plugin', 'rewriteComments'];
-        \Typecho\Plugin::factory('Widget\\Base\\Comments')->filter = ['RenewGo_Plugin', 'rewriteAuthorUrl'];
-        \Typecho\Plugin::factory('Widget\\Archive')->header = ['RenewGo_Plugin', 'startBuffer'];
-        \Typecho\Plugin::factory('Widget\\Archive')->footer = ['RenewGo_Plugin', 'endBuffer'];
+        Hook::factory('Utils\\Migration\\SchemaManager')->syncSchema = [Schema::class, 'ensure'];
+        Hook::factory('Widget\\Base\\Contents')->contentEx = [self::class, 'rewriteContent'];
+        Hook::factory('Widget\\Base\\Contents')->excerptEx = [self::class, 'rewriteContent'];
+        Hook::factory('Widget\\Base\\Comments')->contentEx = [self::class, 'rewriteComments'];
+        Hook::factory('Widget\\Base\\Comments')->filter = [self::class, 'rewriteAuthorUrl'];
+        Hook::factory('Widget\\Archive')->header = [self::class, 'startBuffer'];
+        Hook::factory('Widget\\Archive')->footer = [self::class, 'endBuffer'];
     }
 
     public static function getSettings(): array
@@ -865,7 +874,7 @@ class RenewGo_Plugin implements PluginInterface
         $settings = self::getSettings();
         $settings['whitelist'] = $rules;
         $settings = self::normalize($settings);
-        \Widget\Plugins\Edit::configPlugin(self::NAME, $settings);
+        PluginsEdit::configPlugin(self::NAME, $settings);
         self::clearConfigCache();
         return $settings;
     }
@@ -980,7 +989,7 @@ class RenewGo_Plugin implements PluginInterface
     private static function createTables(): void
     {
         try {
-            Schema::ensureRenewGo(Db::get());
+            Schema::ensure(Db::get());
         } catch (Throwable $e) {
             self::reportException('createTables', $e);
             throw new RuntimeException(_t('RenewGo 数据表初始化失败，插件未启用'), 0, $e);

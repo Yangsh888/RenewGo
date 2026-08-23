@@ -4,8 +4,8 @@ if (!defined('__TYPECHO_ROOT_DIR__')) {
 }
 
 $user->pass('administrator');
-$settings = RenewGo_Plugin::getSettings();
-$db = \Typecho\Db::get();
+$settings = TypechoPlugin\RenewGo\Plugin::getSettings();
+$db = Typecho\Db::get();
 $limit = (int) ($settings['panelSize'] ?? 40);
 $limit = max(10, min(200, $limit));
 $logs = [];
@@ -26,19 +26,19 @@ try {
         'jump_block' => (int) ($summaryBlock->num ?? 0)
     ];
     $logs = $db->fetchAll($db->select()->from('table.renew_go_logs')
-        ->order('id', \Typecho\Db::SORT_DESC)->limit($limit));
-} catch (Throwable $e) {
+        ->order('id', Typecho\Db::SORT_DESC)->limit($limit));
+} catch (\Throwable $e) {
     $logs = [];
     $backendError = _t('日志与限流状态后端不可用，外链跳转会按保守策略拒绝，请检查数据库表和权限。');
     error_log('RenewGo.Panel: ' . $e->getMessage());
 }
 
-$urlTest = RenewGo_Plugin::apiUrl('test');
-$urlPurge = RenewGo_Plugin::apiUrl('purge');
-$urlExport = RenewGo_Plugin::apiUrl('export');
-$urlImport = RenewGo_Plugin::apiUrl('import');
+$urlTest = TypechoPlugin\RenewGo\Plugin::apiUrl('test');
+$urlPurge = TypechoPlugin\RenewGo\Plugin::apiUrl('purge');
+$urlExport = TypechoPlugin\RenewGo\Plugin::apiUrl('export');
+$urlImport = TypechoPlugin\RenewGo\Plugin::apiUrl('import');
 ?>
-<link rel="stylesheet" href="<?php echo htmlspecialchars(RenewGo_Plugin::assetUrl('assets/panel.css'), ENT_QUOTES, 'UTF-8'); ?>">
+<link rel="stylesheet" href="<?php echo htmlspecialchars(TypechoPlugin\RenewGo\Plugin::assetUrl('assets/panel.css'), ENT_QUOTES, 'UTF-8'); ?>">
 <div class="tr-panel renewgo-panel">
     <section class="tr-card">
         <div class="tr-card-b">
@@ -85,11 +85,11 @@ $urlImport = RenewGo_Plugin::apiUrl('import');
         </div>
         <div class="tr-card-b">
             <div class="renewgo-inline">
-                <input id="renewgoTestUrl" class="tr-panel-input" type="text" placeholder="https://example.com/page">
+                <input id="renewgoTestUrl" class="tr-panel-input" type="text" aria-label="待测试的 URL" placeholder="https://example.com/page">
                 <button id="renewgoTestBtn" type="button" class="btn primary"><?php _e('测试规则'); ?></button>
             </div>
             <p class="tr-panel-note"><?php _e('用于验证某个 URL 是否命中白名单、是否被改写以及改写后的跳转地址。'); ?></p>
-            <div id="renewgoTestResult" class="renewgo-result"></div>
+            <div id="renewgoTestResult" class="renewgo-result" aria-live="polite" aria-atomic="true"></div>
         </div>
     </section>
 
@@ -107,6 +107,7 @@ $urlImport = RenewGo_Plugin::apiUrl('import');
             <p class="tr-panel-note"><?php _e('每行一条规则，可直接编辑后导入，也可先导出备份现有内容。'); ?></p>
             <textarea id="renewgoRules"
                       class="tr-panel-input renewgo-rules"
+                      aria-label="外链白名单规则"
                       spellcheck="false"
                       placeholder="example.com&#10;*.example.com&#10;https://example.com/path"><?php echo htmlspecialchars((string) ($settings['whitelist'] ?? ''), ENT_QUOTES, 'UTF-8'); ?></textarea>
         </div>
@@ -149,7 +150,7 @@ $urlImport = RenewGo_Plugin::apiUrl('import');
                                 <td><?php echo htmlspecialchars((string) $row['action'], ENT_QUOTES, 'UTF-8'); ?></td>
                                 <td><?php echo htmlspecialchars((string) $row['result'], ENT_QUOTES, 'UTF-8'); ?></td>
                                 <td class="mono"><?php echo htmlspecialchars((string) ($row['target'] ?? ''), ENT_QUOTES, 'UTF-8'); ?></td>
-                                <td><?php echo !empty($row['created_at']) ? (new \Typecho\Date((int) $row['created_at']))->format('Y-m-d H:i:s') : '-'; ?></td>
+                                <td><?php echo !empty($row['created_at']) ? (new Typecho\Date((int) $row['created_at']))->format('Y-m-d H:i:s') : '-'; ?></td>
                             </tr>
                         <?php endforeach; ?>
                     <?php endif; ?>
@@ -168,4 +169,4 @@ window.RenewGoPanel = <?php echo json_encode([
     'import' => $urlImport
 ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES); ?>;
 </script>
-<script src="<?php echo htmlspecialchars(RenewGo_Plugin::assetUrl('assets/panel.js'), ENT_QUOTES, 'UTF-8'); ?>"></script>
+<script src="<?php echo htmlspecialchars(TypechoPlugin\RenewGo\Plugin::assetUrl('assets/panel.js'), ENT_QUOTES, 'UTF-8'); ?>"></script>
