@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="<?php echo htmlspecialchars(str_replace('_', '-', (string) (\Utils\Helper::options()->lang ?? 'zh_CN')), ENT_QUOTES, 'UTF-8'); ?>">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
@@ -152,10 +152,11 @@
         var left = <?php echo (int) $staySeconds; ?>;
         var node = document.querySelector('.meta');
         var jump = <?php echo json_encode((string) $jumpUrl, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES); ?>;
+        var countdown = <?php echo json_encode(_t('%d 秒后自动跳转'), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES); ?>;
         var timer = setInterval(function () {
             left -= 1;
             if (node && left >= 0) {
-                node.textContent = left + ' 秒后自动跳转';
+                node.textContent = countdown.replace('%d', String(left));
             }
             if (left <= 0) {
                 clearInterval(timer);

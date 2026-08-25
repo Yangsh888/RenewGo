@@ -72,8 +72,8 @@ $urlImport = TypechoPlugin\RenewGo\Plugin::apiUrl('import');
             <span><?php _e('频率拦截'); ?></span>
         </article>
         <article class="tr-panel-kpi">
-            <strong><?php echo $limit; ?></strong>
-            <span><?php _e('当前面板条数'); ?></span>
+            <strong><?php echo count($logs); ?></strong>
+            <span><?php _e('本页显示条数'); ?></span>
         </article>
     </div>
 
