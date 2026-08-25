@@ -31,7 +31,7 @@ if (!defined('__TYPECHO_ROOT_DIR__')) {
  * @author TypeRenew
  * @link https://www.typerenew.com/
  * @version 1.3.1
- * @since 1.4.1
+ * @since 1.5.0
  */
 class Plugin implements PluginInterface
 {
